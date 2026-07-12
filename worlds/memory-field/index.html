@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Laws Elsewhere — Memory Field</title>
+<style>
+:root{color-scheme:dark;--bg:#080b12;--panel:#101625ee;--line:#ffffff20;--text:#edf3ff;--muted:#95a3b8}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;overflow:hidden}
+#app{display:grid;grid-template-columns:minmax(0,1fr) 310px;height:100%}
+#stage{position:relative;min-width:0}canvas{width:100%;height:100%;display:block;cursor:crosshair}
+#hud{position:absolute;left:14px;top:14px;display:flex;gap:7px;flex-wrap:wrap;max-width:calc(100% - 28px)}
+button,input{font:inherit}.pill{background:#111827cc;border:1px solid var(--line);color:var(--text);padding:8px 11px;border-radius:999px;backdrop-filter:blur(8px)}
+button.pill{cursor:pointer}.pill.active{background:#eef;color:#111}.pill:hover{border-color:#ffffff55}
+#side{border-left:1px solid var(--line);background:var(--panel);padding:18px;overflow:auto}
+h1{font-size:20px;margin:0 0 5px}.sub{color:var(--muted);font-size:12px;line-height:1.45;margin-bottom:16px}
+h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#b9c7dc;margin:20px 0 8px}
+.stat{display:flex;justify-content:space-between;border-bottom:1px solid #ffffff12;padding:7px 0;font:12px ui-monospace,monospace}
+textarea{width:100%;min-height:110px;background:#070a11;border:1px solid var(--line);border-radius:12px;color:var(--text);padding:10px;resize:vertical}
+#log{font:11px ui-monospace,monospace;color:#a9b7ca;max-height:180px;overflow:auto}
+.event{padding:5px 0;border-bottom:1px solid #ffffff0d}
+#legend{display:flex;gap:8px;font-size:11px;color:var(--muted);line-height:1.35}
+.dot{width:10px;height:10px;border-radius:50%;margin-top:2px;flex:none}
+@media(max-width:760px){#app{grid-template-columns:1fr}#side{position:absolute;right:0;top:0;width:min(88vw,330px);height:100%;transform:translateX(100%);transition:.2s}#side.open{transform:none}#sideToggle{display:block!important}}
+#sideToggle{display:none}
+</style>
+</head>
+<body>
+<div id="app">
+<section id="stage">
+<canvas id="world"></canvas>
+<div id="hud">
+<button class="pill active" data-mode="observe">Observe</button>
+<button class="pill" data-mode="brush">Amnesia brush</button>
+<button class="pill" id="forces">Forces: off</button>
+<button class="pill" id="pause">Pause</button>
+<button class="pill" id="reset">Reset seed</button>
+<button class="pill" id="newSeed">New seed</button>
+<button class="pill" id="sideToggle">Notebook</button>
+<span class="pill">Seed <input id="seed" value="elsewhere-001" style="width:105px;border:0;background:transparent;color:inherit"></span>
+</div>
+</section>
+<aside id="side">
+<h1>Unknown Field Laboratory</h1>
+<div class="sub">Blind mode is active. Observe first. Intervene carefully. Decide what you think the world remembers.</div>
+<div id="legend">
+<span class="dot" style="background:#fff"></span>
+<span>Click a particle in Observe mode to trace its path. Brush empty space to bleach the environment; brush a particle to erase something carried by the particle.</span>
+</div>
+<h2>Measurements</h2>
+<div class="stat"><span>elapsed</span><b id="elapsed">0.0 s</b></div>
+<div class="stat"><span>selected particle</span><b id="selected">none</b></div>
+<div class="stat"><span>external field energy</span><b id="energy">0</b></div>
+<div class="stat"><span>selected internal magnitude</span><b id="memory">—</b></div>
+<h2>Hypothesis</h2>
+<textarea id="hypothesis" placeholder="What law do you think governs attraction here?"></textarea>
+<button class="pill" id="export" style="margin-top:8px">Export experiment JSON</button>
+<h2>Notebook</h2>
+<div id="log"></div>
+</aside>
+</div>
+<script>
+'use strict';
+function hashString(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const GW=120,GH=80,K=3,N=10,DT=1/60,D=1.8,LAMBDA=.10,Q=4,ALPHA=.9,BETA=.06,CHI=34,GAMMA=2.2;
+const canvas=document.querySelector('#world'),ctx=canvas.getContext('2d'),fieldCanvas=document.createElement('canvas'),fctx=fieldCanvas.getContext('2d');
+fieldCanvas.width=GW;fieldCanvas.height=GH;let C=new Float32Array(GW*GH*K),C2=new Float32Array(C.length),particles=[],time=0,paused=false,mode='observe',showForces=false,selected=-1,events=[],acc=0,last=performance.now();
+const trails=[...Array(N)].map(()=>[]);let view={w:1,h:1,sx:1,sy:1};
+function log(type,data={}){const e={t:+time.toFixed(3),type,data};events.push(e);const d=document.createElement('div');d.className='event';d.textContent=`${e.t.toFixed(2)}  ${type}`;document.querySelector('#log').prepend(d)}
+function norm3(a){let n=Math.hypot(a[0],a[1],a[2]);return n?[a[0]/n,a[1]/n,a[2]/n]:[0,0,0]}
+function idx(x,y,k){return((y*GW+x)*3+k)}
+function sample(x,y,k){x=Math.max(0,Math.min(GW-1,x));y=Math.max(0,Math.min(GH-1,y));let x0=Math.floor(x),y0=Math.floor(y),x1=Math.min(GW-1,x0+1),y1=Math.min(GH-1,y0+1),tx=x-x0,ty=y-y0;return(1-ty)*((1-tx)*C[idx(x0,y0,k)]+tx*C[idx(x1,y0,k)])+ty*((1-tx)*C[idx(x0,y1,k)]+tx*C[idx(x1,y1,k)])}
+function reset(){const seed=document.querySelector('#seed').value||'elsewhere-001',r=mulberry32(hashString(seed));C.fill(0);C2.fill(0);time=0;events=[];document.querySelector('#log').innerHTML='';selected=-1;particles=[...Array(N)].map(()=>{let s=norm3([.12+r(),.12+r(),.12+r()]);return{x:8+r()*(GW-16),y:8+r()*(GH-16),vx:(r()-.5)*4,vy:(r()-.5)*4,s,h:[0,0,0],fx:0,fy:0}});trails.forEach(t=>t.length=0);log('session_start',{seed,particles:N,channels:K})}
+reset();
+function deposit(){for(const p of particles){let cx=Math.round(p.x),cy=Math.round(p.y);for(let oy=-2;oy<=2;oy++)for(let ox=-2;ox<=2;ox++){let x=cx+ox,y=cy+oy;if(x<0||x>=GW||y<0||y>=GH)continue;let w=Math.exp(-(ox*ox+oy*oy)/2.2);for(let k=0;k<3;k++)C[idx(x,y,k)]+=Q*p.s[k]*w*DT}}}
+function diffuse(){let r=D*DT;for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)for(let k=0;k<3;k++){let xm=Math.max(0,x-1),xp=Math.min(GW-1,x+1),ym=Math.max(0,y-1),yp=Math.min(GH-1,y+1),i=idx(x,y,k),v=C[i];let lap=C[idx(xm,y,k)]+C[idx(xp,y,k)]+C[idx(x,ym,k)]+C[idx(x,yp,k)]-4*v;C2[i]=Math.max(0,v+r*lap-LAMBDA*DT*v)}[C,C2]=[C2,C]}
+function fieldDotAt(x,y,h){let z=0;for(let k=0;k<3;k++)z+=h[k]*sample(x,y,k);return z}
+function step(){diffuse();deposit();for(let i=0;i<N;i++){const p=particles[i],speed=Math.hypot(p.vx,p.vy),ux=speed>.01?p.vx/speed:1,uy=speed>.01?p.vy/speed:0;let sx=p.x+ux*1.2,sy=p.y+uy*1.2,v=[sample(sx,sy,0),sample(sx,sy,1),sample(sx,sy,2)],vn=norm3(v);for(let k=0;k<3;k++)p.h[k]+=DT*(ALPHA*(vn[k]-p.h[k])-BETA*p.h[k]);let hn=Math.hypot(...p.h);if(hn>1)for(let k=0;k<3;k++)p.h[k]/=hn;let eps=.65,gx=(fieldDotAt(p.x+eps,p.y,p.h)-fieldDotAt(p.x-eps,p.y,p.h))/(2*eps),gy=(fieldDotAt(p.x,p.y+eps,p.h)-fieldDotAt(p.x,p.y-eps,p.h))/(2*eps);let fx=CHI*gx-GAMMA*p.vx,fy=CHI*gy-GAMMA*p.vy;for(let j=0;j<N;j++)if(j!==i){let q=particles[j],dx=p.x-q.x,dy=p.y-q.y,d=Math.hypot(dx,dy)||.001;if(d<2.2){let f=18*(2.2-d)/2.2;fx+=f*dx/d;fy+=f*dy/d}}p.fx=fx;p.fy=fy;p.vx+=fx*DT;p.vy+=fy*DT}for(let i=0;i<N;i++){let p=particles[i];p.x+=p.vx*DT;p.y+=p.vy*DT;if(p.x<1){p.x=1;p.vx=Math.abs(p.vx)*.7}if(p.x>GW-2){p.x=GW-2;p.vx=-Math.abs(p.vx)*.7}if(p.y<1){p.y=1;p.vy=Math.abs(p.vy)*.7}if(p.y>GH-2){p.y=GH-2;p.vy=-Math.abs(p.vy)*.7}if(i===selected){let t=trails[i];t.push([p.x,p.y]);if(t.length>420)t.shift()}}time+=DT}
+let brushing=false;
+function worldPos(e){let r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*GW,y:(e.clientY-r.top)/r.height*GH}}
+function brushAt(w){let hit=-1,best=2.4;particles.forEach((p,i)=>{let d=Math.hypot(p.x-w.x,p.y-w.y);if(d<best){best=d;hit=i}});if(hit>=0){let p=particles[hit];for(let k=0;k<3;k++)p.h[k]*=.72;log('particle_memory_erased',{particle:hit,x:+w.x.toFixed(2),y:+w.y.toFixed(2)})}else{let r=5,cx=Math.round(w.x),cy=Math.round(w.y);for(let y=Math.max(0,cy-r);y<=Math.min(GH-1,cy+r);y++)for(let x=Math.max(0,cx-r);x<=Math.min(GW-1,cx+r);x++){let d=Math.hypot(x-w.x,y-w.y);if(d<r){let f=.38+.62*d/r;for(let k=0;k<3;k++)C[idx(x,y,k)]*=f}}log('external_trace_bleached',{x:+w.x.toFixed(2),y:+w.y.toFixed(2),radius:r})}}
+canvas.addEventListener('pointerdown',e=>{let w=worldPos(e);if(mode==='brush'){brushing=true;brushAt(w)}else{let best=-1,bd=3;particles.forEach((p,i)=>{let d=Math.hypot(p.x-w.x,p.y-w.y);if(d<bd){bd=d;best=i}});selected=best;if(best>=0){trails[best].length=0;log('trajectory_selected',{particle:best})}}});
+canvas.addEventListener('pointermove',e=>{if(brushing&&mode==='brush')brushAt(worldPos(e))});addEventListener('pointerup',()=>brushing=false);
+function resize(){let r=canvas.getBoundingClientRect(),d=devicePixelRatio||1;canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);view={w:r.width,h:r.height,sx:r.width/GW,sy:r.height/GH}}
+addEventListener('resize',resize);resize();
+function color(v){return Math.max(0,Math.min(255,255*(1-Math.exp(-v*.9))))}
+function renderField(){let im=fctx.createImageData(GW,GH),energy=0;for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){let ii=(y*GW+x)*4,ci=idx(x,y,0),r=C[ci],g=C[ci+1],b=C[ci+2];energy+=r+g+b;im.data[ii]=color(r);im.data[ii+1]=color(g);im.data[ii+2]=color(b);im.data[ii+3]=255}fctx.putImageData(im,0,0);ctx.imageSmoothingEnabled=true;ctx.globalAlpha=.8;ctx.drawImage(fieldCanvas,0,0,view.w,view.h);ctx.globalAlpha=1;document.querySelector('#energy').textContent=energy.toFixed(1)}
+function rgb(a,alpha=1){return`rgba(${Math.round(a[0]*255)},${Math.round(a[1]*255)},${Math.round(a[2]*255)},${alpha})`}
+function draw(){ctx.fillStyle='#080b12';ctx.fillRect(0,0,view.w,view.h);renderField();if(selected>=0){let t=trails[selected];ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.5;ctx.beginPath();t.forEach((p,i)=>{let X=p[0]*view.sx,Y=p[1]*view.sy;i?ctx.lineTo(X,Y):ctx.moveTo(X,Y)});ctx.stroke()}particles.forEach((p,i)=>{let X=p.x*view.sx,Y=p.y*view.sy,rad=5;ctx.shadowBlur=18;ctx.shadowColor=rgb(p.s,.8);ctx.fillStyle=rgb(p.s);ctx.beginPath();ctx.arc(X,Y,rad,0,7);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle=rgb(p.h,.95);ctx.lineWidth=3;ctx.beginPath();ctx.arc(X,Y,8,0,7);ctx.stroke();if(i===selected){ctx.strokeStyle='white';ctx.lineWidth=1;ctx.beginPath();ctx.arc(X,Y,12,0,7);ctx.stroke()}if(showForces){ctx.strokeStyle='rgba(255,255,255,.75)';ctx.beginPath();ctx.moveTo(X,Y);ctx.lineTo(X+p.fx*view.sx*.12,Y+p.fy*view.sy*.12);ctx.stroke()}});document.querySelector('#elapsed').textContent=time.toFixed(1)+' s';document.querySelector('#selected').textContent=selected<0?'none':selected;document.querySelector('#memory').textContent=selected<0?'—':Math.hypot(...particles[selected].h).toFixed(3)}
+function loop(now){let frame=Math.min(.1,(now-last)/1000);last=now;if(!paused){acc+=frame;let n=0;while(acc>=DT&&n++<8){step();acc-=DT}}draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(z=>z.classList.toggle('active',z===b));log('mode_changed',{mode})});
+document.querySelector('#forces').onclick=e=>{showForces=!showForces;e.target.textContent='Forces: '+(showForces?'on':'off');log('force_vectors',{visible:showForces})};
+document.querySelector('#pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Resume':'Pause';log(paused?'paused':'resumed')};
+document.querySelector('#reset').onclick=reset;document.querySelector('#newSeed').onclick=()=>{document.querySelector('#seed').value='elsewhere-'+Math.floor(Math.random()*1e6);reset()};document.querySelector('#sideToggle').onclick=()=>document.querySelector('#side').classList.toggle('open');
+document.querySelector('#export').onclick=()=>{let out={project:'Laws Elsewhere',universe:'Memory Field v1',seed:document.querySelector('#seed').value,elapsed:time,hypothesis:document.querySelector('#hypothesis').value,events,particles:particles.map((p,i)=>({i,position:[p.x,p.y],velocity:[p.vx,p.vy],signature:p.s,memory:p.h}))};let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));a.download=`memory-field-${out.seed}.json`;a.click();URL.revokeObjectURL(a.href)};
+</script></body></html>
