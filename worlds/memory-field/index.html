@@ -8,26 +8,69 @@
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;overflow:hidden}
 #app{display:grid;grid-template-columns:minmax(0,1fr) 310px;height:100%}
 #stage{position:relative;min-width:0}canvas{width:100%;height:100%;display:block;cursor:crosshair}
-#hud{position:absolute;left:14px;top:14px;display:flex;gap:7px;flex-wrap:wrap;max-width:calc(100% - 28px)}
-button,input{font:inherit}.pill{background:#111827cc;border:1px solid var(--line);color:var(--text);padding:8px 11px;border-radius:999px;backdrop-filter:blur(8px)}
+#hud{position:absolute;left:14px;top:14px;display:flex;gap:7px;flex-wrap:wrap;max-width:calc(100% - 28px);z-index:4}
+#identity{position:absolute;left:18px;bottom:18px;z-index:3;max-width:410px;padding:13px 15px;border-radius:16px;background:#0d1320c9;border:1px solid var(--line);backdrop-filter:blur(10px)}
+#identity b{display:block;font-size:16px;margin-bottom:3px}#identity span{font-size:12px;line-height:1.4;color:var(--muted)}
+button,input{font:inherit}.pill{background:#111827df;border:1px solid var(--line);color:var(--text);padding:8px 11px;border-radius:999px;backdrop-filter:blur(8px)}
 button.pill{cursor:pointer}.pill.active{background:#eef;color:#111}.pill:hover{border-color:#ffffff55}
-#side{border-left:1px solid var(--line);background:var(--panel);padding:18px;overflow:auto}
+#side{border-left:1px solid var(--line);background:var(--panel);padding:18px;overflow:auto;z-index:12}
+#closeSide{display:none;position:sticky;top:0;float:right;margin:-4px -4px 8px 8px;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#080b12;color:white;font-size:24px;line-height:1;cursor:pointer}
+#backdrop{display:none;position:fixed;inset:0;background:#0009;z-index:11}
+#welcome{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:20px;background:#050811d9;backdrop-filter:blur(10px)}
+#welcome.hidden{display:none}.welcome-card{width:min(620px,100%);background:#101625;border:1px solid #ffffff26;border-radius:24px;padding:24px;box-shadow:0 30px 100px #000}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#9fb3d1}.welcome-card h1{font-size:34px;line-height:1.05;margin:8px 0 10px}.welcome-card p{color:#c5d0e2;line-height:1.55;margin:8px 0}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.step{background:#080c15;border:1px solid var(--line);border-radius:14px;padding:12px;font-size:13px;line-height:1.4}.step b{display:block;margin-bottom:4px;color:white}
+.welcome-actions{display:flex;gap:10px;flex-wrap:wrap}.primary{background:#edf2ff!important;color:#080b12!important;border-color:#edf2ff!important;font-weight:700}
+.smallnote{font-size:11px!important;color:#8291a8!important}
 h1{font-size:20px;margin:0 0 5px}.sub{color:var(--muted);font-size:12px;line-height:1.45;margin-bottom:16px}
 h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#b9c7dc;margin:20px 0 8px}
 .stat{display:flex;justify-content:space-between;border-bottom:1px solid #ffffff12;padding:7px 0;font:12px ui-monospace,monospace}
 textarea{width:100%;min-height:110px;background:#070a11;border:1px solid var(--line);border-radius:12px;color:var(--text);padding:10px;resize:vertical}
 #log{font:11px ui-monospace,monospace;color:#a9b7ca;max-height:180px;overflow:auto}
+#hypothesisStatus{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#080c15;color:#b9c7dc;font-size:12px;line-height:1.45;display:none}
+#revealLinks{display:none;gap:8px;flex-wrap:wrap;margin-top:8px}#revealLinks a{text-decoration:none}
 .event{padding:5px 0;border-bottom:1px solid #ffffff0d}
 #legend{display:flex;gap:8px;font-size:11px;color:var(--muted);line-height:1.35}
 .dot{width:10px;height:10px;border-radius:50%;margin-top:2px;flex:none}
-@media(max-width:760px){#app{grid-template-columns:1fr}#side{position:absolute;right:0;top:0;width:min(88vw,330px);height:100%;transform:translateX(100%);transition:.2s}#side.open{transform:none}#sideToggle{display:block!important}}
+@media(max-width:760px){
+ #app{grid-template-columns:1fr}
+ #side{position:fixed;right:0;top:0;width:min(90vw,360px);height:100%;transform:translateX(105%);transition:.22s;padding-top:14px}
+ #side.open{transform:none}#sideToggle{display:block!important}#closeSide{display:block}
+ #backdrop.open{display:block}
+ #hud{left:10px;top:10px;right:10px;max-width:none;gap:6px}
+ .pill{padding:8px 10px;font-size:14px}
+ #identity{left:10px;right:10px;bottom:10px;max-width:none}
+ .steps{grid-template-columns:1fr}.welcome-card{padding:20px}.welcome-card h1{font-size:28px}
+ #seedWrap,#reset,#newSeed{display:none}
+}
 #sideToggle{display:none}
 </style>
 </head>
 <body>
+
+<div id="welcome">
+  <div class="welcome-card">
+    <div class="eyebrow">Laws Elsewhere · Experiment 001</div>
+    <h1>What if memory were a force?</h1>
+    <p>This is a tiny invented universe. Each glowing particle leaves a colored trace behind it and carries something it has learned from the world. You are not expected to understand it immediately—that is the experiment.</p>
+    <div class="steps">
+      <div class="step"><b>1 · Watch</b>Let the particles move for 20–30 seconds. Look for paths, pairings, and reversals.</div>
+      <div class="step"><b>2 · Select</b>Tap a particle in <em>Observe</em> mode. A white trail will reveal where it travels.</div>
+      <div class="step"><b>3 · Intervene</b>Choose <em>Amnesia brush</em>. Swipe empty space, then swipe directly over a particle. Compare what changes.</div>
+    </div>
+    <p><b>Your question:</b> Is attraction stored in the particle, left behind in space, or created by resemblance between colors?</p>
+    <div class="welcome-actions">
+      <button class="pill primary" id="begin">Begin experiment</button>
+      <button class="pill" id="openNotebookIntro">Open notebook</button>
+    </div>
+    <p class="smallnote">Blind mode means the equations stay hidden until you form your own hypothesis. You can reopen this guide anytime with “What is this?”</p>
+  </div>
+</div>
+
 <div id="app">
 <section id="stage">
 <canvas id="world"></canvas>
+<div id="identity"><b>Memory Field</b><span>Particles leave colored traces in space. Your job is to discover what makes them follow, flee, remember, or forget.</span></div>
 <div id="hud">
 <button class="pill active" data-mode="observe">Observe</button>
 <button class="pill" data-mode="brush">Amnesia brush</button>
@@ -36,12 +79,15 @@ textarea{width:100%;min-height:110px;background:#070a11;border:1px solid var(--l
 <button class="pill" id="reset">Reset seed</button>
 <button class="pill" id="newSeed">New seed</button>
 <button class="pill" id="sideToggle">Notebook</button>
-<span class="pill">Seed <input id="seed" value="elsewhere-001" style="width:105px;border:0;background:transparent;color:inherit"></span>
+<button class="pill" id="help">What is this?</button>
+<span class="pill" id="seedWrap">Seed <input id="seed" value="elsewhere-001" style="width:105px;border:0;background:transparent;color:inherit"></span>
 </div>
 </section>
+<div id="backdrop"></div>
 <aside id="side">
-<h1>Unknown Field Laboratory</h1>
-<div class="sub">Blind mode is active. Observe first. Intervene carefully. Decide what you think the world remembers.</div>
+<button id="closeSide" aria-label="Close notebook">×</button>
+<h1>Experiment notebook</h1>
+<div class="sub">Record what you observe before reading the hidden equations. This panel can be closed with × or by tapping outside it.</div>
 <div id="legend">
 <span class="dot" style="background:#fff"></span>
 <span>Click a particle in Observe mode to trace its path. Brush empty space to bleach the environment; brush a particle to erase something carried by the particle.</span>
@@ -53,7 +99,9 @@ textarea{width:100%;min-height:110px;background:#070a11;border:1px solid var(--l
 <div class="stat"><span>selected internal magnitude</span><b id="memory">—</b></div>
 <h2>Hypothesis</h2>
 <textarea id="hypothesis" placeholder="What law do you think governs attraction here?"></textarea>
-<button class="pill" id="export" style="margin-top:8px">Export experiment JSON</button>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="pill primary" id="recordHypothesis">Record hypothesis</button><button class="pill" id="export">Export experiment JSON</button></div>
+<div id="hypothesisStatus"></div>
+<div id="revealLinks"><a class="pill" href="MODEL.md" target="_blank">Reveal the hidden model</a><a class="pill" href="PREDICTIONS-SOL.md" target="_blank">Read Sol’s predictions</a><a class="pill" href="PREDICTIONS-FABLE.md" target="_blank">Read Fable’s predictions</a></div>
 <h2>Notebook</h2>
 <div id="log"></div>
 </aside>
@@ -91,6 +139,24 @@ function loop(now){let frame=Math.min(.1,(now-last)/1000);last=now;if(!paused){a
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(z=>z.classList.toggle('active',z===b));log('mode_changed',{mode})});
 document.querySelector('#forces').onclick=e=>{showForces=!showForces;e.target.textContent='Forces: '+(showForces?'on':'off');log('force_vectors',{visible:showForces})};
 document.querySelector('#pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Resume':'Pause';log(paused?'paused':'resumed')};
-document.querySelector('#reset').onclick=reset;document.querySelector('#newSeed').onclick=()=>{document.querySelector('#seed').value='elsewhere-'+Math.floor(Math.random()*1e6);reset()};document.querySelector('#sideToggle').onclick=()=>document.querySelector('#side').classList.toggle('open');
+document.querySelector('#reset').onclick=reset;
+document.querySelector('#newSeed').onclick=()=>{document.querySelector('#seed').value='elsewhere-'+Math.floor(Math.random()*1e6);reset()};
+const side=document.querySelector('#side'),backdrop=document.querySelector('#backdrop'),welcome=document.querySelector('#welcome');
+function openSide(){side.classList.add('open');backdrop.classList.add('open')}
+function closeSide(){side.classList.remove('open');backdrop.classList.remove('open')}
+document.querySelector('#sideToggle').onclick=openSide;
+document.querySelector('#closeSide').onclick=closeSide;
+backdrop.onclick=closeSide;
+document.querySelector('#begin').onclick=()=>{welcome.classList.add('hidden');paused=false;document.querySelector('#pause').textContent='Pause';log('experiment_begun')};
+document.querySelector('#help').onclick=()=>welcome.classList.remove('hidden');
+document.querySelector('#openNotebookIntro').onclick=()=>{welcome.classList.add('hidden');openSide()};
+document.querySelector('#recordHypothesis').onclick=()=>{
+ const text=document.querySelector('#hypothesis').value.trim(),status=document.querySelector('#hypothesisStatus'),links=document.querySelector('#revealLinks');
+ if(!text){status.style.display='block';status.textContent='Write a hypothesis first—even a rough one. “The particles follow their own colored trails” is a perfectly good scientific beginning.';return}
+ log('hypothesis_recorded',{text});
+ status.style.display='block';
+ status.innerHTML='<b>Hypothesis recorded at '+time.toFixed(1)+' s.</b><br>Nothing was sent anywhere. It is stored only in this browser session and included in your exported JSON. You can now keep experimenting, or reveal the model and compare your idea.';
+ links.style.display='flex';
+};
 document.querySelector('#export').onclick=()=>{let out={project:'Laws Elsewhere',universe:'Memory Field v1',seed:document.querySelector('#seed').value,elapsed:time,hypothesis:document.querySelector('#hypothesis').value,events,particles:particles.map((p,i)=>({i,position:[p.x,p.y],velocity:[p.vx,p.vy],signature:p.s,memory:p.h}))};let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));a.download=`memory-field-${out.seed}.json`;a.click();URL.revokeObjectURL(a.href)};
 </script></body></html>
